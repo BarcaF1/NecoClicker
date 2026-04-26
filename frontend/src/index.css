@@ -1,0 +1,180 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===========================================================================
+   THEMES — 5 штук: light, dark, purple-neon, green-neon, vampire.
+   Все цвета через HSL CSS-переменные.
+   =========================================================================== */
+
+@layer base {
+  :root,
+  [data-theme='light'] {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 222 47% 11%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 222 47% 11%;
+    --radius: 0.65rem;
+    --glow: 0 0 0 transparent;
+  }
+
+  [data-theme='dark'] {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 213 27% 84%;
+    --glow: 0 0 0 transparent;
+  }
+
+  /* ENEMY DARK — почти чёрный, "фрагмастерский": OLED-friendly,
+     минимум контраста между card/background, sharp edges */
+  [data-theme='enemy-dark'] {
+    --background: 240 25% 2%;
+    --foreground: 210 25% 95%;
+    --card: 240 30% 4%;
+    --card-foreground: 210 25% 95%;
+    --popover: 240 30% 4%;
+    --popover-foreground: 210 25% 95%;
+    --primary: 210 30% 96%;
+    --primary-foreground: 240 30% 4%;
+    --secondary: 240 30% 9%;
+    --secondary-foreground: 210 25% 95%;
+    --muted: 240 25% 7%;
+    --muted-foreground: 220 10% 55%;
+    --accent: 240 35% 14%;
+    --accent-foreground: 210 25% 95%;
+    --destructive: 0 70% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 30% 11%;
+    --input: 240 30% 11%;
+    --ring: 210 30% 90%;
+    --glow: 0 0 0 transparent;
+  }
+
+  [data-theme='purple-neon'] {
+    --background: 270 35% 5%;
+    --foreground: 280 30% 96%;
+    --card: 270 40% 9%;
+    --card-foreground: 280 30% 96%;
+    --popover: 270 40% 9%;
+    --popover-foreground: 280 30% 96%;
+    --primary: 280 100% 65%;
+    --primary-foreground: 270 100% 5%;
+    --secondary: 270 40% 14%;
+    --secondary-foreground: 280 100% 85%;
+    --muted: 270 35% 12%;
+    --muted-foreground: 280 25% 70%;
+    --accent: 290 100% 60%;
+    --accent-foreground: 270 100% 5%;
+    --destructive: 320 90% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 270 60% 22%;
+    --input: 270 60% 22%;
+    --ring: 280 100% 70%;
+    --glow: 0 0 30px hsl(285 100% 60% / 0.7);
+  }
+
+  [data-theme='green-neon'] {
+    --background: 150 30% 4%;
+    --foreground: 140 30% 96%;
+    --card: 150 35% 7%;
+    --card-foreground: 140 30% 96%;
+    --popover: 150 35% 7%;
+    --popover-foreground: 140 30% 96%;
+    --primary: 140 100% 55%;
+    --primary-foreground: 150 100% 5%;
+    --secondary: 150 35% 12%;
+    --secondary-foreground: 140 100% 80%;
+    --muted: 150 30% 10%;
+    --muted-foreground: 140 25% 70%;
+    --accent: 140 100% 50%;
+    --accent-foreground: 150 100% 5%;
+    --destructive: 0 80% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 140 50% 18%;
+    --input: 140 50% 18%;
+    --ring: 140 100% 60%;
+    --glow: 0 0 28px hsl(140 100% 55% / 0.65);
+  }
+
+  [data-theme='vampire'] {
+    --background: 350 60% 6%;
+    --foreground: 0 0% 95%;
+    --card: 350 50% 10%;
+    --card-foreground: 0 0% 95%;
+    --popover: 350 50% 10%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 350 90% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 350 50% 16%;
+    --secondary-foreground: 0 100% 90%;
+    --muted: 350 40% 13%;
+    --muted-foreground: 350 20% 70%;
+    --accent: 0 80% 40%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 90% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 350 45% 22%;
+    --input: 350 45% 22%;
+    --ring: 350 90% 60%;
+    --glow: 0 0 24px hsl(350 90% 50% / 0.55);
+  }
+
+  * {
+    @apply border-border;
+  }
+  html, body, #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--muted)); border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.6); }
+}
+
+@layer utilities {
+  .glow-primary { box-shadow: var(--glow); }
+  .text-glow {
+    text-shadow: 0 0 8px hsl(var(--primary) / 0.7), 0 0 18px hsl(var(--primary) / 0.4);
+  }
+  .neon-border {
+    border: 1px solid hsl(var(--primary) / 0.6);
+    box-shadow: var(--glow);
+  }
+}

@@ -1,0 +1,43 @@
+# ==== Go ====
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# ==== Node / frontend ====
+node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.cache/
+frontend/node_modules/.cache/
+
+# ==== Wails ====
+build/bin/
+build/darwin/Build/
+# auto-generated при каждом билде:
+frontend/wailsjs/
+
+# ==== IDE / editors ====
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ==== Build/runtime artifacts ====
+*.log
+*.pdb
+*.syso
+
+# ==== Wails-generated cache ====
+frontend/package.json.md5
+frontend/vite.config.d.ts
+frontend/vite.config.js
+node_modules/.cache/
+
+# ==== Claude Code local config ====
+.claude/

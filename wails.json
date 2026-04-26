@@ -1,0 +1,18 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "NecoClicker",
+  "outputfilename": "NecoClicker",
+  "frontend:install": "pnpm install",
+  "frontend:build": "pnpm build",
+  "frontend:dev:watcher": "pnpm dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "NecoClicker"
+  },
+  "info": {
+    "productName": "NecoClicker",
+    "productVersion": "1.2.0",
+    "copyright": "",
+    "comments": "Lightweight Windows autoclicker with macros"
+  }
+}
