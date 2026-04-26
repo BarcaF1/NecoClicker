@@ -1,6 +1,19 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  darkMode: ['class', '[data-theme="dark"]', '[data-theme="enemy-dark"]', '[data-theme="purple-neon"]', '[data-theme="green-neon"]', '[data-theme="vampire"]'],
+  darkMode: [
+    'class',
+    '[data-theme="dark"]',
+    '[data-theme="enemy-dark"]',
+    '[data-theme="purple-neon"]',
+    '[data-theme="green-neon"]',
+    '[data-theme="vampire"]',
+    '[data-theme="red-neon"]',
+    '[data-theme="cyan-neon"]',
+    '[data-theme="pink-neon"]',
+    '[data-theme="orange-neon"]',
+    '[data-theme="yellow-neon"]',
+    '[data-theme="blue-neon"]',
+  ],
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     container: {

@@ -150,6 +150,150 @@
     --glow: 0 0 24px hsl(350 90% 50% / 0.55);
   }
 
+  /* RED NEON — чистый красный, не винный (отличается от vampire) */
+  [data-theme='red-neon'] {
+    --background: 0 35% 4%;
+    --foreground: 10 30% 96%;
+    --card: 0 40% 7%;
+    --card-foreground: 10 30% 96%;
+    --popover: 0 40% 7%;
+    --popover-foreground: 10 30% 96%;
+    --primary: 0 100% 58%;
+    --primary-foreground: 0 100% 5%;
+    --secondary: 0 40% 14%;
+    --secondary-foreground: 10 100% 85%;
+    --muted: 0 35% 11%;
+    --muted-foreground: 10 25% 70%;
+    --accent: 10 100% 50%;
+    --accent-foreground: 0 100% 5%;
+    --destructive: 320 90% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 60% 22%;
+    --input: 0 60% 22%;
+    --ring: 0 100% 65%;
+    --glow: 0 0 28px hsl(0 100% 55% / 0.7);
+  }
+
+  /* CYAN NEON — электрический бирюзовый */
+  [data-theme='cyan-neon'] {
+    --background: 195 40% 4%;
+    --foreground: 180 30% 96%;
+    --card: 195 45% 7%;
+    --card-foreground: 180 30% 96%;
+    --popover: 195 45% 7%;
+    --popover-foreground: 180 30% 96%;
+    --primary: 180 100% 55%;
+    --primary-foreground: 195 100% 5%;
+    --secondary: 195 45% 13%;
+    --secondary-foreground: 180 100% 85%;
+    --muted: 195 40% 11%;
+    --muted-foreground: 180 25% 70%;
+    --accent: 190 100% 50%;
+    --accent-foreground: 195 100% 5%;
+    --destructive: 350 90% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 190 60% 22%;
+    --input: 190 60% 22%;
+    --ring: 180 100% 60%;
+    --glow: 0 0 28px hsl(185 100% 55% / 0.7);
+  }
+
+  /* PINK NEON — горячий розовый/маджента */
+  [data-theme='pink-neon'] {
+    --background: 320 35% 5%;
+    --foreground: 320 25% 96%;
+    --card: 320 40% 8%;
+    --card-foreground: 320 25% 96%;
+    --popover: 320 40% 8%;
+    --popover-foreground: 320 25% 96%;
+    --primary: 325 100% 65%;
+    --primary-foreground: 320 100% 5%;
+    --secondary: 320 40% 14%;
+    --secondary-foreground: 325 100% 88%;
+    --muted: 320 35% 11%;
+    --muted-foreground: 320 20% 70%;
+    --accent: 330 100% 60%;
+    --accent-foreground: 320 100% 5%;
+    --destructive: 0 90% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 325 60% 22%;
+    --input: 325 60% 22%;
+    --ring: 325 100% 70%;
+    --glow: 0 0 28px hsl(325 100% 60% / 0.7);
+  }
+
+  /* ORANGE NEON — кислотно-оранжевый, "закатный" */
+  [data-theme='orange-neon'] {
+    --background: 25 35% 4%;
+    --foreground: 30 25% 96%;
+    --card: 25 40% 7%;
+    --card-foreground: 30 25% 96%;
+    --popover: 25 40% 7%;
+    --popover-foreground: 30 25% 96%;
+    --primary: 25 100% 56%;
+    --primary-foreground: 25 100% 5%;
+    --secondary: 25 40% 13%;
+    --secondary-foreground: 30 100% 85%;
+    --muted: 25 35% 10%;
+    --muted-foreground: 30 25% 70%;
+    --accent: 35 100% 55%;
+    --accent-foreground: 25 100% 5%;
+    --destructive: 0 90% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 25 60% 22%;
+    --input: 25 60% 22%;
+    --ring: 25 100% 60%;
+    --glow: 0 0 28px hsl(28 100% 55% / 0.7);
+  }
+
+  /* YELLOW NEON — электрический жёлтый */
+  [data-theme='yellow-neon'] {
+    --background: 50 30% 4%;
+    --foreground: 50 25% 96%;
+    --card: 50 35% 7%;
+    --card-foreground: 50 25% 96%;
+    --popover: 50 35% 7%;
+    --popover-foreground: 50 25% 96%;
+    --primary: 55 100% 55%;
+    --primary-foreground: 50 100% 5%;
+    --secondary: 50 35% 13%;
+    --secondary-foreground: 55 100% 85%;
+    --muted: 50 30% 10%;
+    --muted-foreground: 50 25% 70%;
+    --accent: 60 100% 50%;
+    --accent-foreground: 50 100% 5%;
+    --destructive: 0 90% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 55 60% 22%;
+    --input: 55 60% 22%;
+    --ring: 55 100% 60%;
+    --glow: 0 0 28px hsl(55 100% 55% / 0.7);
+  }
+
+  /* BLUE NEON — электрический синий, глубже cyan */
+  [data-theme='blue-neon'] {
+    --background: 220 40% 5%;
+    --foreground: 220 25% 96%;
+    --card: 220 45% 8%;
+    --card-foreground: 220 25% 96%;
+    --popover: 220 45% 8%;
+    --popover-foreground: 220 25% 96%;
+    --primary: 220 100% 62%;
+    --primary-foreground: 220 100% 5%;
+    --secondary: 220 45% 14%;
+    --secondary-foreground: 220 100% 88%;
+    --muted: 220 40% 11%;
+    --muted-foreground: 220 25% 70%;
+    --accent: 230 100% 60%;
+    --accent-foreground: 220 100% 5%;
+    --destructive: 350 90% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 225 65% 25%;
+    --input: 225 65% 25%;
+    --ring: 220 100% 70%;
+    --glow: 0 0 30px hsl(225 100% 60% / 0.75);
+  }
+
   * {
     @apply border-border;
   }

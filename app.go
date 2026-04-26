@@ -119,11 +119,23 @@ func themePingColor(name string) (byte, byte, byte) {
 	case "enemy-dark":
 		return 80, 255, 130 // зелёный
 	case "purple-neon":
-		return 230, 70, 255 // мадженто
+		return 230, 70, 255 // маджента
 	case "green-neon":
 		return 80, 255, 110 // ядовитый зелёный
 	case "vampire":
 		return 255, 40, 80 // алый
+	case "red-neon":
+		return 255, 40, 40 // чистый красный
+	case "cyan-neon":
+		return 30, 240, 255 // электрический циан
+	case "pink-neon":
+		return 255, 80, 200 // горячий розовый
+	case "orange-neon":
+		return 255, 120, 30 // оранжевый
+	case "yellow-neon":
+		return 255, 240, 50 // электрический жёлтый
+	case "blue-neon":
+		return 70, 130, 255 // электрический синий
 	default: // light
 		return 230, 50, 80 // насыщенный розово-красный
 	}
