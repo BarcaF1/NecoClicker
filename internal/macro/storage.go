@@ -36,7 +36,7 @@ func Load() (*Config, error) {
 	if err := json.Unmarshal(b, cfg); err != nil {
 		return nil, err
 	}
-	cfg.migrate()
+	cfg.Migrate()
 	return cfg, nil
 }
 

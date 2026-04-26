@@ -1,11 +1,12 @@
 // Package engine выполняет кликер и цепочки в фоновых goroutine'ах
-// с безопасной отменой через context. Дополнительно ведёт счётчик
-// кликов и периодически репортит CPS наружу.
+// с безопасной отменой через context, опциональными лимитами
+// (длительность / число кликов) и рандомизацией интервала.
 package engine
 
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,10 +17,9 @@ import (
 
 type Logger func(string)
 
-// CPSReport — снимок измерения, эмитится примерно раз в 250 мс.
 type CPSReport struct {
-	CPS   float64 `json:"cps"`   // сглаженный rate (среднее за окно)
-	Total uint64  `json:"total"` // всего кликов с момента сброса
+	CPS   float64 `json:"cps"`
+	Total uint64  `json:"total"`
 }
 
 type CPSCallback func(CPSReport)
@@ -78,7 +78,6 @@ func (e *Engine) emit(running bool) {
 	}
 }
 
-// Stop безопасно прерывает текущую задачу и ждёт её завершения.
 func (e *Engine) Stop() {
 	e.mu.Lock()
 	c := e.cancel
@@ -90,7 +89,6 @@ func (e *Engine) Stop() {
 	e.wg.Wait()
 }
 
-// Toggle — для глобального хоткея пуск/стоп.
 func (e *Engine) Toggle(start func()) {
 	if e.IsRunning() {
 		e.Stop()
@@ -117,15 +115,9 @@ func (e *Engine) finish() {
 
 // ---- click counting ---------------------------------------------------------
 
-// ResetClicks обнуляет накопительный счётчик (используется UI).
-func (e *Engine) ResetClicks() { e.clickCount.Store(0) }
-
-// TotalClicks возвращает текущее значение счётчика без блокировок.
+func (e *Engine) ResetClicks()      { e.clickCount.Store(0) }
 func (e *Engine) TotalClicks() uint64 { return e.clickCount.Load() }
 
-// StartCPSReporter запускает периодический эмиттер CPS. Останавливается
-// при отмене переданного ctx (StopCPSReporter ИЛИ ctx приложения).
-// Окно сглаживания — последние 4 семпла по 250 мс ≈ 1 секунда.
 func (e *Engine) StartCPSReporter(parent context.Context, cb CPSCallback) {
 	ctx, cancel := context.WithCancel(parent)
 	e.mu.Lock()
@@ -137,7 +129,7 @@ func (e *Engine) StartCPSReporter(parent context.Context, cb CPSCallback) {
 
 	go func() {
 		const tick = 250 * time.Millisecond
-		const window = 4 // 4×250ms = 1s
+		const window = 4
 		t := time.NewTicker(tick)
 		defer t.Stop()
 
@@ -187,7 +179,6 @@ func (e *Engine) StopCPSReporter() {
 func (e *Engine) doClick(button string, x, y int, useCurrent bool) {
 	e.clickCount.Add(1)
 	if e.IsDryRun() {
-		// dry-run уже логирует caller
 		return
 	}
 	winmouse.Click(button, x, y, useCurrent)
@@ -196,6 +187,11 @@ func (e *Engine) doClick(button string, x, y int, useCurrent bool) {
 // ---- runners ----------------------------------------------------------------
 
 func (e *Engine) RunSimple(cfg macro.SimpleConfig) {
+	e.RunSimpleLimited(cfg, macro.RunLimits{})
+}
+
+// RunSimpleLimited — кликер с опциональными лимитами и jitter'ом.
+func (e *Engine) RunSimpleLimited(cfg macro.SimpleConfig, lim macro.RunLimits) {
 	ctx := e.start()
 	go func() {
 		defer e.finish()
@@ -207,7 +203,28 @@ func (e *Engine) RunSimple(cfg macro.SimpleConfig) {
 		if ms < 0 {
 			ms = 0
 		}
-		e.log(fmt.Sprintf("Simple started: btn=%s interval=%gms", btn, ms))
+		desc := fmt.Sprintf("Simple started: btn=%s interval=%gms", btn, ms)
+		if lim.JitterMs > 0 {
+			desc += fmt.Sprintf(" jitter=±%gms", lim.JitterMs/2)
+		}
+		if lim.DurationSec > 0 {
+			desc += fmt.Sprintf(" duration=%ds", lim.DurationSec)
+		}
+		if lim.MaxClicks > 0 {
+			desc += fmt.Sprintf(" max=%d", lim.MaxClicks)
+		}
+		e.log(desc)
+
+		// Лимит по времени реализуем как отдельный таймер,
+		// который отменяет ctx; счётчик кликов проверяем после каждого fire'а.
+		var deadlineCancel context.CancelFunc
+		if lim.DurationSec > 0 {
+			ctx, deadlineCancel = context.WithTimeout(ctx, time.Duration(lim.DurationSec)*time.Second)
+			defer deadlineCancel()
+		}
+
+		startTotal := e.clickCount.Load()
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 		fire := func() {
 			if e.IsDryRun() {
@@ -220,13 +237,31 @@ func (e *Engine) RunSimple(cfg macro.SimpleConfig) {
 			e.doClick(btn, cfg.X, cfg.Y, cfg.UseCurrent)
 		}
 
-		// Преобразование float ms → time.Duration. 0.001 ms = 1 µs, 0 = без сна.
-		d := time.Duration(ms * float64(time.Millisecond))
+		// Лимит по кликам относительно текущего значения счётчика
+		clicksDone := func() bool {
+			if lim.MaxClicks == 0 {
+				return false
+			}
+			done := e.clickCount.Load() - startTotal
+			return done >= lim.MaxClicks
+		}
 
-		// Hot path: ms == 0 (tight loop)
-		if ms == 0 {
+		nextDelay := func() time.Duration {
+			d := ms
+			if lim.JitterMs > 0 {
+				// рандомное смещение в [-J/2, +J/2]
+				d += (rng.Float64() - 0.5) * lim.JitterMs
+				if d < 0 {
+					d = 0
+				}
+			}
+			return time.Duration(d * float64(time.Millisecond))
+		}
+
+		// Hot path: ms == 0 без джиттера → tight loop
+		if ms == 0 && lim.JitterMs == 0 {
 			for {
-				if ctx.Err() != nil {
+				if ctx.Err() != nil || clicksDone() {
 					e.log("Simple stopped")
 					return
 				}
@@ -234,17 +269,24 @@ func (e *Engine) RunSimple(cfg macro.SimpleConfig) {
 			}
 		}
 
-		// Sub-ms path: time.NewTicker имеет резолюцию ~OS scheduler tick
-		// (на Windows ~1ms с timeBeginPeriod, иначе ~15ms). Для значений
-		// меньше 500µs select+After всё равно даёт лучший результат, чем спин.
+		// Обычный путь: select+After (резолюция ~OS scheduler tick)
 		fire()
+		if clicksDone() {
+			e.log("Simple stopped (max clicks)")
+			return
+		}
 		for {
+			d := nextDelay()
 			select {
 			case <-ctx.Done():
 				e.log("Simple stopped")
 				return
 			case <-time.After(d):
 				fire()
+				if clicksDone() {
+					e.log("Simple stopped (max clicks)")
+					return
+				}
 			}
 		}
 	}()

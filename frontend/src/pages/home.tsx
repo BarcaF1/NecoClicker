@@ -12,6 +12,7 @@ import {
 import { useConfig } from '@/hooks/use-config'
 import { useEngine } from '@/components/engine-provider'
 import { useConfirm } from '@/components/confirm-dialog'
+import { HotkeyRecorder } from '@/components/hotkey-recorder'
 import { CursorPos, StartProfile, Stop } from '../../wailsjs/go/main/App'
 import { macro } from '../../wailsjs/go/models'
 import { cn } from '@/lib/utils'
@@ -206,14 +207,13 @@ export function HomePage() {
               })()}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="hk" className="flex items-center gap-1.5">
+              <Label className="flex items-center gap-1.5">
                 <Keyboard className="h-3.5 w-3.5" /> Хоткей пуск/стоп
               </Label>
-              <Input
-                id="hk" value={hotkey}
-                onChange={(e) => { setHotkey(e.target.value); setDirty(true) }}
-                placeholder="F6, Ctrl+Shift+F1, ..."
-                className="font-mono"
+              <HotkeyRecorder
+                value={hotkey}
+                onChange={(v) => { setHotkey(v); setDirty(true) }}
+                placeholder="нажми «Записать» — потом клавишу/Mouse4-5"
               />
             </div>
           </div>

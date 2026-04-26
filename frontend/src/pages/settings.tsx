@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ConfigPath } from '../../wailsjs/go/main/App'
+import { Button } from '@/components/ui/button'
+import { ConfigPath, ImportConfigFromFile, ExportConfigToFile } from '../../wailsjs/go/main/App'
 import { BrowserOpenURL } from '../../wailsjs/runtime/runtime'
-import { Folder, Keyboard, Info, Github, User, ExternalLink } from 'lucide-react'
+import { Folder, Keyboard, Info, Github, User, ExternalLink, Download, Upload, Database } from 'lucide-react'
+import { useConfig } from '@/hooks/use-config'
+import { useConfirm } from '@/components/confirm-dialog'
 import necoUrl from '@/assets/neco.png'
 
 const GITHUB_URL = 'https://github.com/BarcaF1/NecoClicker'
@@ -11,13 +14,59 @@ const AUTHOR = 'allbanned'
 export function SettingsPage() {
   const [path, setPath] = useState('')
   useEffect(() => { ConfigPath().then(setPath) }, [])
+  const { reload } = useConfig()
+  const { ask, alert: showAlert } = useConfirm()
+
+  const onImport = async () => {
+    const ok = await ask({
+      title: 'Импортировать конфиг?',
+      description: 'Текущие профили, цепочки и настройки будут заменены данными из выбранного файла.',
+      confirmText: 'Импортировать',
+      destructive: true,
+    })
+    if (!ok) return
+    try {
+      await ImportConfigFromFile()
+      await reload()
+      await showAlert('Готово', 'Конфиг успешно импортирован.')
+    } catch (e: any) {
+      await showAlert('Ошибка импорта', String(e?.message || e))
+    }
+  }
+
+  const onExport = async () => {
+    try {
+      await ExportConfigToFile()
+    } catch (e: any) {
+      await showAlert('Ошибка экспорта', String(e?.message || e))
+    }
+  }
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Folder className="h-5 w-5 text-primary" /> Конфигурация
+            <Database className="h-5 w-5 text-primary" /> Импорт / экспорт
+          </CardTitle>
+          <CardDescription>
+            Перенос профилей и цепочек на другой ПК или бэкап. Формат — `.necoclicker.json`.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={onExport}>
+            <Download className="h-4 w-4" /> Экспортировать конфиг
+          </Button>
+          <Button variant="outline" onClick={onImport}>
+            <Upload className="h-4 w-4" /> Импортировать конфиг
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Folder className="h-5 w-5 text-primary" /> Расположение конфига
           </CardTitle>
           <CardDescription>Все настройки и цепочки хранятся в одном JSON-файле.</CardDescription>
         </CardHeader>
@@ -60,7 +109,7 @@ export function SettingsPage() {
           <div className="flex items-center gap-4">
             <img src={necoUrl} alt="" className="h-20 w-20 rounded-xl border border-border object-cover" />
             <div className="space-y-1 text-sm">
-              <div className="text-base font-semibold">NecoClicker <span className="text-muted-foreground">v1.2</span></div>
+              <div className="text-base font-semibold">NecoClicker <span className="text-muted-foreground">v1.3</span></div>
               <div className="text-xs text-muted-foreground">
                 Лёгкий автокликер с глобальными хоткеями и редактором макросов.<br />
                 Go · Wails · React · Tailwind.

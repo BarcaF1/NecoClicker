@@ -1,20 +1,34 @@
 import { cn } from '@/lib/utils'
-import { Home, Layers3, FlaskConical, Palette, Settings as Cog } from 'lucide-react'
+import {
+  Home, Layers3, FlaskConical, Palette, Settings as Cog,
+  Timer as TimerIcon, Shuffle, Pin, PinOff,
+} from 'lucide-react'
 import { useEngine } from '@/components/engine-provider'
+import { useConfig } from '@/hooks/use-config'
+import { SetAlwaysOnTop } from '../../wailsjs/go/main/App'
 import necoUrl from '@/assets/neco.png'
 
-export type PageId = 'home' | 'macros' | 'sandbox' | 'themes' | 'settings'
+export type PageId = 'home' | 'macros' | 'timer' | 'jitter' | 'sandbox' | 'themes' | 'settings'
 
 const NAV: { id: PageId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { id: 'home',     label: 'Главная',  icon: Home },
-  { id: 'macros',   label: 'Макросы',  icon: Layers3 },
-  { id: 'sandbox',  label: 'Тест',     icon: FlaskConical },
-  { id: 'themes',   label: 'Темы',     icon: Palette },
-  { id: 'settings', label: 'Настройки', icon: Cog },
+  { id: 'home',     label: 'Главная',     icon: Home },
+  { id: 'macros',   label: 'Макросы',     icon: Layers3 },
+  { id: 'timer',    label: 'Таймер',      icon: TimerIcon },
+  { id: 'jitter',   label: 'Хаос',        icon: Shuffle },
+  { id: 'sandbox',  label: 'Тест',        icon: FlaskConical },
+  { id: 'themes',   label: 'Темы',        icon: Palette },
+  { id: 'settings', label: 'Настройки',   icon: Cog },
 ]
 
 export function AppSidebar({ page, setPage }: { page: PageId; setPage: (p: PageId) => void }) {
   const { running } = useEngine()
+  const { cfg, reload } = useConfig()
+  const onTop = !!cfg?.always_on_top
+
+  const togglePin = async () => {
+    await SetAlwaysOnTop(!onTop)
+    reload()
+  }
 
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-card/50 backdrop-blur">
@@ -27,7 +41,7 @@ export function AppSidebar({ page, setPage }: { page: PageId; setPage: (p: PageI
         </div>
         <div className="flex flex-col">
           <span className="text-base font-bold tracking-tight text-glow">NecoClicker</span>
-          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">v1.2</span>
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">v1.3</span>
         </div>
       </div>
 
@@ -56,7 +70,20 @@ export function AppSidebar({ page, setPage }: { page: PageId; setPage: (p: PageI
         })}
       </nav>
 
-      <div className="mt-auto px-4 py-4">
+      <div className="mt-auto space-y-2 px-3 py-4">
+        <button
+          onClick={togglePin}
+          className={cn(
+            'flex w-full items-center justify-between gap-2 rounded-lg border bg-background/60 px-3 py-2 text-xs transition-all',
+            onTop ? 'border-primary/50 text-primary glow-primary' : 'border-border text-muted-foreground hover:border-primary/30',
+          )}
+          title={onTop ? 'Убрать «поверх всех окон»' : 'Закрепить поверх всех окон'}
+        >
+          {onTop ? <Pin className="h-3.5 w-3.5" /> : <PinOff className="h-3.5 w-3.5" />}
+          <span className="flex-1 text-left">Поверх окон</span>
+          <span className={cn('text-[10px] font-bold', onTop && 'text-primary')}>{onTop ? 'ON' : 'OFF'}</span>
+        </button>
+
         <div className={cn(
           'flex items-center gap-2 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs',
           running && 'border-primary/50'

@@ -2,22 +2,34 @@ package main
 
 import (
 	"context"
+	_ "embed"
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"sync/atomic"
+	"time"
 
 	"NecoClicker/internal/engine"
 	"NecoClicker/internal/hotkey"
 	"NecoClicker/internal/macro"
 	"NecoClicker/internal/winmouse"
 
+	"fyne.io/systray"
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+//go:embed build/windows/icon.ico
+var trayIconIco []byte
 
 type App struct {
 	ctx     context.Context
 	cfg     *macro.Config
 	engine  *engine.Engine
 	hotkeys *hotkey.Manager
+
+	trayToggleItem atomic.Value // *systray.MenuItem
+	trayPinItem    atomic.Value // *systray.MenuItem
 }
 
 func NewApp() *App {
@@ -35,21 +47,34 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.engine.OnStateChange(func(running bool) {
 		wruntime.EventsEmit(a.ctx, "engine:state", running)
+		if it, ok := a.trayToggleItem.Load().(*systray.MenuItem); ok && it != nil {
+			if running {
+				it.SetTitle("Остановить кликер")
+			} else {
+				it.SetTitle("Запустить активный профиль")
+			}
+		}
 	})
 	if err := a.hotkeys.Start(); err != nil {
 		log.Printf("hotkey start: %v", err)
 	}
 	a.rebindHotkeys()
-	// CPS-репортер на всё время жизни приложения
 	a.engine.StartCPSReporter(a.ctx, func(r engine.CPSReport) {
 		wruntime.EventsEmit(a.ctx, "engine:cps", r)
 	})
+
+	if a.cfg.AlwaysOnTop {
+		wruntime.WindowSetAlwaysOnTop(a.ctx, true)
+	}
+
+	go a.runTray()
 }
 
 func (a *App) shutdown(ctx context.Context) {
 	a.engine.StopCPSReporter()
 	a.engine.Stop()
 	a.hotkeys.Stop()
+	systray.Quit()
 }
 
 func (a *App) logEvent(line string) {
@@ -67,16 +92,92 @@ func (a *App) SetTheme(name string) error {
 	return macro.Save(a.cfg)
 }
 
-// ---------------- Профили простого кликера (multi-preset) ----------------
+func (a *App) SetAlwaysOnTop(v bool) error {
+	a.cfg.AlwaysOnTop = v
+	if a.ctx != nil {
+		wruntime.WindowSetAlwaysOnTop(a.ctx, v)
+	}
+	if it, ok := a.trayPinItem.Load().(*systray.MenuItem); ok && it != nil {
+		if v {
+			it.Check()
+		} else {
+			it.Uncheck()
+		}
+	}
+	return macro.Save(a.cfg)
+}
 
-// ListProfiles возвращает все простые-кликер профили.
+// ImportConfig — заменяет текущий конфиг данными из JSON-строки.
+func (a *App) ImportConfig(data string) error {
+	cfg := &macro.Config{}
+	if err := json.Unmarshal([]byte(data), cfg); err != nil {
+		return fmt.Errorf("invalid config: %w", err)
+	}
+	// валидируем через ту же миграцию
+	cfg.Migrate()
+	a.cfg = cfg
+	a.rebindHotkeys()
+	if a.ctx != nil {
+		wruntime.WindowSetAlwaysOnTop(a.ctx, a.cfg.AlwaysOnTop)
+	}
+	return macro.Save(a.cfg)
+}
+
+// ExportConfig — отдаёт текущий конфиг как JSON-строку.
+func (a *App) ExportConfig() (string, error) {
+	b, err := json.MarshalIndent(a.cfg, "", "  ")
+	return string(b), err
+}
+
+// ImportConfigFromFile — выбор файла через системный диалог.
+func (a *App) ImportConfigFromFile() error {
+	if a.ctx == nil {
+		return fmt.Errorf("no app context")
+	}
+	path, err := wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{
+		Title: "Импорт конфига NecoClicker",
+		Filters: []wruntime.FileFilter{
+			{DisplayName: "NecoClicker config", Pattern: "*.necoclicker.json;*.json"},
+		},
+	})
+	if err != nil || path == "" {
+		return err
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return a.ImportConfig(string(b))
+}
+
+// ExportConfigToFile — диалог сохранения.
+func (a *App) ExportConfigToFile() error {
+	if a.ctx == nil {
+		return fmt.Errorf("no app context")
+	}
+	ts := time.Now().Format("20060102-150405")
+	path, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{
+		Title:           "Экспорт конфига NecoClicker",
+		DefaultFilename: "necoclicker-" + ts + ".necoclicker.json",
+		Filters: []wruntime.FileFilter{
+			{DisplayName: "NecoClicker config", Pattern: "*.necoclicker.json;*.json"},
+		},
+	})
+	if err != nil || path == "" {
+		return err
+	}
+	data, err := a.ExportConfig()
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(data), 0o644)
+}
+
+// ---------------- Профили ----------------
+
 func (a *App) ListProfiles() []macro.SimpleConfig { return a.cfg.Profiles }
+func (a *App) ActiveProfileIndex() int            { return a.cfg.Active }
 
-// ActiveProfileIndex — индекс активного профиля (по нему запускается StartSimple
-// и работает глобальный хоткей).
-func (a *App) ActiveProfileIndex() int { return a.cfg.Active }
-
-// SetActiveProfile меняет активный профиль и перепривязывает хоткеи.
 func (a *App) SetActiveProfile(idx int) error {
 	if idx < 0 || idx >= len(a.cfg.Profiles) {
 		return fmt.Errorf("profile index %d out of range", idx)
@@ -86,13 +187,10 @@ func (a *App) SetActiveProfile(idx int) error {
 	return macro.Save(a.cfg)
 }
 
-// SaveProfile создаёт (idx=-1) или обновляет существующий профиль.
-// Возвращает индекс получившейся записи.
 func (a *App) SaveProfile(idx int, p macro.SimpleConfig) (int, error) {
 	if p.Name == "" {
 		p.Name = fmt.Sprintf("Profile %d", len(a.cfg.Profiles)+1)
 	}
-	// 0 = max speed (tight loop). Минимум — 0, максимум — 600000ms (10 минут).
 	if p.IntervalMs < 0 {
 		p.IntervalMs = 0
 	}
@@ -112,7 +210,6 @@ func (a *App) SaveProfile(idx int, p macro.SimpleConfig) (int, error) {
 	return idx, macro.Save(a.cfg)
 }
 
-// DeleteProfile удаляет профиль; всегда оставляет хотя бы один.
 func (a *App) DeleteProfile(idx int) error {
 	if idx < 0 || idx >= len(a.cfg.Profiles) {
 		return nil
@@ -145,21 +242,35 @@ func (a *App) DeleteChain(idx int) error {
 		return nil
 	}
 	a.cfg.Chains = append(a.cfg.Chains[:idx], a.cfg.Chains[idx+1:]...)
+	if a.cfg.ActiveChain >= len(a.cfg.Chains) {
+		a.cfg.ActiveChain = len(a.cfg.Chains) - 1
+		if a.cfg.ActiveChain < 0 {
+			a.cfg.ActiveChain = 0
+		}
+	}
 	a.rebindHotkeys()
 	return macro.Save(a.cfg)
 }
+
+func (a *App) SetActiveChain(idx int) error {
+	if idx < 0 || idx >= len(a.cfg.Chains) {
+		return fmt.Errorf("chain index %d out of range", idx)
+	}
+	a.cfg.ActiveChain = idx
+	return macro.Save(a.cfg)
+}
+
+func (a *App) ActiveChainIndex() int { return a.cfg.ActiveChain }
 
 // ---------------- Управление движком ----------------
 
 func (a *App) IsRunning() bool { return a.engine.IsRunning() }
 
-// StartSimple запускает активный профиль.
 func (a *App) StartSimple() {
 	a.engine.SetDryRun(false)
 	a.engine.RunSimple(a.cfg.ActiveProfile())
 }
 
-// StartProfile запускает заданный по индексу профиль (без переключения активного).
 func (a *App) StartProfile(idx int) error {
 	if idx < 0 || idx >= len(a.cfg.Profiles) {
 		return fmt.Errorf("profile index %d out of range", idx)
@@ -185,13 +296,11 @@ func (a *App) StartChainDry(idx int) {
 	a.engine.RunChain(a.cfg.Chains[idx])
 }
 
-// StartSimpleDry — запуск активного профиля в dry-run режиме (для CPS-замеров без реальных кликов).
 func (a *App) StartSimpleDry() {
 	a.engine.SetDryRun(true)
 	a.engine.RunSimple(a.cfg.ActiveProfile())
 }
 
-// StartProfileDry — запуск конкретного профиля в dry-run.
 func (a *App) StartProfileDry(idx int) error {
 	if idx < 0 || idx >= len(a.cfg.Profiles) {
 		return fmt.Errorf("profile index %d out of range", idx)
@@ -201,13 +310,33 @@ func (a *App) StartProfileDry(idx int) error {
 	return nil
 }
 
+// StartProfileLimited — запуск профиля с ограничениями (для Таймера / Jitter).
+func (a *App) StartProfileLimited(idx int, lim macro.RunLimits, dry bool) error {
+	if idx < 0 || idx >= len(a.cfg.Profiles) {
+		return fmt.Errorf("profile index %d out of range", idx)
+	}
+	a.engine.SetDryRun(dry)
+	a.engine.RunSimpleLimited(a.cfg.Profiles[idx], lim)
+	return nil
+}
+
 func (a *App) Stop() { a.engine.Stop() }
 
-// ---------------- CPS / счётчик ----------------
+// ---------------- CPS ----------------
 
-func (a *App) ResetClicks() { a.engine.ResetClicks() }
-
+func (a *App) ResetClicks()        { a.engine.ResetClicks() }
 func (a *App) TotalClicks() uint64 { return a.engine.TotalClicks() }
+
+// ---------------- Hotkey recorder ----------------
+
+// RecordHotkey ждёт первое глобальное нажатие (любая клавиша/Mouse4/Mouse5)
+// и возвращает строку, готовую для сохранения в конфиг.
+func (a *App) RecordHotkey(timeoutMs int) (string, error) {
+	if timeoutMs <= 0 {
+		timeoutMs = 8000
+	}
+	return a.hotkeys.RecordOnce(time.Duration(timeoutMs) * time.Millisecond)
+}
 
 // ---------------- Утилиты ----------------
 
@@ -221,12 +350,23 @@ func (a *App) ConfigPath() string {
 	return p
 }
 
+func (a *App) ShowWindow() {
+	if a.ctx != nil {
+		wruntime.WindowShow(a.ctx)
+	}
+}
+
+func (a *App) HideWindow() {
+	if a.ctx != nil {
+		wruntime.WindowHide(a.ctx)
+	}
+}
+
 // rebindHotkeys: активный профиль + все цепочки с непустым хоткеем.
 func (a *App) rebindHotkeys() {
 	binds := []hotkey.Bind{}
 
 	if len(a.cfg.Profiles) > 0 {
-		// Хоткей АКТИВНОГО профиля toggleит запуск
 		ap := a.cfg.ActiveProfile()
 		if ap.Hotkey != "" {
 			binds = append(binds, hotkey.Bind{
@@ -263,4 +403,43 @@ func (a *App) rebindHotkeys() {
 	if err := a.hotkeys.SetAll(binds); err != nil {
 		log.Printf("hotkey rebind: %v", err)
 	}
+}
+
+// ---------------- Tray ----------------
+
+func (a *App) runTray() {
+	systray.Run(func() {
+		systray.SetIcon(trayIconIco)
+		systray.SetTitle("NecoClicker")
+		systray.SetTooltip("NecoClicker — кликер")
+
+		showItem := systray.AddMenuItem("Показать окно", "")
+		toggleItem := systray.AddMenuItem("Запустить активный профиль", "Toggle active simple profile")
+		a.trayToggleItem.Store(toggleItem)
+		pinItem := systray.AddMenuItemCheckbox("Поверх всех окон", "Always-on-top", a.cfg.AlwaysOnTop)
+		a.trayPinItem.Store(pinItem)
+		systray.AddSeparator()
+		quitItem := systray.AddMenuItem("Выйти", "Quit application")
+
+		go func() {
+			for {
+				select {
+				case <-showItem.ClickedCh:
+					a.ShowWindow()
+				case <-toggleItem.ClickedCh:
+					a.engine.Toggle(func() {
+						a.engine.SetDryRun(false)
+						a.engine.RunSimple(a.cfg.ActiveProfile())
+					})
+				case <-pinItem.ClickedCh:
+					_ = a.SetAlwaysOnTop(!a.cfg.AlwaysOnTop)
+				case <-quitItem.ClickedCh:
+					if a.ctx != nil {
+						wruntime.Quit(a.ctx)
+					}
+					return
+				}
+			}
+		}()
+	}, nil)
 }

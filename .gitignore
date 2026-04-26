@@ -37,6 +37,7 @@ Thumbs.db
 frontend/package.json.md5
 frontend/vite.config.d.ts
 frontend/vite.config.js
+frontend/tsconfig.tsbuildinfo
 node_modules/.cache/
 
 # ==== Claude Code local config ====

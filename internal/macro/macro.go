@@ -51,11 +51,27 @@ type SimpleConfig struct {
 	Hotkey     string      `json:"hotkey"`
 }
 
+// RunLimits — общие ограничения на запуск (для "Таймера" и "Jitter").
+//   - DurationSec=0 + MaxClicks=0 → без лимита
+//   - DurationSec>0 → остановиться через N секунд
+//   - MaxClicks>0   → остановиться после N кликов
+//   - Если оба заданы — кто первый сработает, тот и останавливает
+//
+// JitterMs — рандомизация интервала. На каждый клик берётся случайное
+// смещение из [-JitterMs/2, +JitterMs/2] и прибавляется к базовому интервалу.
+type RunLimits struct {
+	DurationSec int     `json:"duration_sec,omitempty"`
+	MaxClicks   uint64  `json:"max_clicks,omitempty"`
+	JitterMs    float64 `json:"jitter_ms,omitempty"`
+}
+
 type Config struct {
-	Profiles []SimpleConfig `json:"profiles"`
-	Active   int            `json:"active"`
-	Chains   []Chain        `json:"chains"`
-	Theme    string         `json:"theme"`
+	Profiles      []SimpleConfig `json:"profiles"`
+	Active        int            `json:"active"`
+	Chains        []Chain        `json:"chains"`
+	ActiveChain   int            `json:"active_chain"`
+	Theme         string         `json:"theme"`
+	AlwaysOnTop   bool           `json:"always_on_top"`
 
 	// Legacy: одиночный профиль из v1.0. На загрузке мигрируется в Profiles[0].
 	LegacySimple *SimpleConfig `json:"simple,omitempty"`
@@ -92,8 +108,8 @@ func DefaultConfig() *Config {
 	}
 }
 
-// migrate выполняет апгрейд старого формата (v1.0) к новому (v1.1).
-func (c *Config) migrate() {
+// Migrate выполняет апгрейд старого формата (v1.0) к новому.
+func (c *Config) Migrate() {
 	if c.LegacySimple != nil {
 		p := *c.LegacySimple
 		if p.Name == "" {

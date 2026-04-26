@@ -6,11 +6,12 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Plus, Trash2, ChevronUp, ChevronDown, Play, Square, Crosshair, MousePointerClick, Move, Timer } from 'lucide-react'
+import { Plus, Trash2, ChevronUp, ChevronDown, Play, Square, Crosshair, MousePointerClick, Move, Timer, Star } from 'lucide-react'
 import { useConfig } from '@/hooks/use-config'
 import { useEngine } from '@/components/engine-provider'
 import { useConfirm } from '@/components/confirm-dialog'
-import { CursorPos, StartChain, Stop } from '../../wailsjs/go/main/App'
+import { HotkeyRecorder } from '@/components/hotkey-recorder'
+import { CursorPos, StartChain, Stop, SetActiveChain } from '../../wailsjs/go/main/App'
 import { macro } from '../../wailsjs/go/models'
 import { cn } from '@/lib/utils'
 
@@ -27,12 +28,13 @@ function newAction(type: 'click' | 'delay' | 'move'): Action {
 }
 
 export function MacrosPage() {
-  const { cfg, saveChain, deleteChain } = useConfig()
+  const { cfg, saveChain, deleteChain, reload } = useConfig()
   const { running } = useEngine()
   const { ask } = useConfirm()
   const [selected, setSelected] = useState(0)
 
   const chains = cfg?.chains ?? []
+  const activeChain = cfg?.active_chain ?? 0
   const cur = chains[selected]
 
   const [name, setName] = useState('')
@@ -57,13 +59,13 @@ export function MacrosPage() {
     setSelected(chains.length)
   }
 
-  const persist = async (acts = actions) => {
+  const persist = async (overrides: Partial<{ name: string; hotkey: string; loops: number; actions: Action[] }> = {}, acts = actions) => {
     if (selected < 0) return
     const ch = new macro.Chain({
-      name: name || `Chain ${selected + 1}`,
-      hotkey,
-      loops: parseInt(loops) || 0,
-      actions: acts,
+      name: overrides.name ?? (name || `Chain ${selected + 1}`),
+      hotkey: overrides.hotkey ?? hotkey,
+      loops: overrides.loops ?? (parseInt(loops) || 0),
+      actions: overrides.actions ?? acts,
     })
     await saveChain(selected, ch)
   }
@@ -85,7 +87,7 @@ export function MacrosPage() {
     setActions((prev) => {
       const next = prev.slice()
       next[i] = new macro.Action({ ...next[i], ...patch } as any)
-      persist(next)
+      persist({}, next)
       return next
     })
   }
@@ -95,21 +97,21 @@ export function MacrosPage() {
       if (j < 0 || j >= prev.length) return prev
       const next = prev.slice()
       ;[next[i], next[j]] = [next[j], next[i]]
-      persist(next)
+      persist({}, next)
       return next
     })
   }
   const removeAction = (i: number) => {
     setActions((prev) => {
       const next = prev.filter((_, k) => k !== i)
-      persist(next)
+      persist({}, next)
       return next
     })
   }
   const addAction = (type: 'click' | 'delay' | 'move') => {
     setActions((prev) => {
       const next = [...prev, newAction(type)]
-      persist(next)
+      persist({}, next)
       return next
     })
   }
@@ -139,7 +141,10 @@ export function MacrosPage() {
                   selected === i ? 'border-primary/60 bg-primary/10 text-primary' : 'hover:bg-accent',
                 )}
               >
-                <span className="font-medium">{c.name || `Chain ${i + 1}`}</span>
+                <span className="flex items-center gap-1.5 font-medium">
+                  {i === activeChain && <Star className="h-3 w-3 fill-current text-primary" />}
+                  {c.name || `Chain ${i + 1}`}
+                </span>
                 <span className="text-[10px] text-muted-foreground">
                   {c.actions?.length ?? 0} шагов{c.hotkey ? ` · ${c.hotkey}` : ''}
                 </span>
@@ -165,7 +170,7 @@ export function MacrosPage() {
                 </div>
                 <div className="space-y-1">
                   <Label>Хоткей</Label>
-                  <Input value={hotkey} onChange={(e) => setHotkey(e.target.value)} onBlur={() => persist()} placeholder="Ctrl+F1" className="font-mono" />
+                  <HotkeyRecorder value={hotkey} onChange={(v) => { setHotkey(v); persist({ hotkey: v }) }} placeholder="—" />
                 </div>
                 <div className="space-y-1">
                   <Label>Повторы (0 = ∞)</Label>
@@ -178,6 +183,15 @@ export function MacrosPage() {
                 ) : (
                   <Button variant="neon" onClick={runChain}><Play className="h-4 w-4" /> Запустить</Button>
                 )}
+                <Button
+                  variant={selected === activeChain ? 'default' : 'ghost'}
+                  size="icon"
+                  onClick={async () => { await SetActiveChain(selected); reload() }}
+                  title={selected === activeChain ? 'Активная цепочка' : 'Сделать активной'}
+                  disabled={selected === activeChain}
+                >
+                  <Star className={cn('h-4 w-4', selected === activeChain && 'fill-current')} />
+                </Button>
                 <Button variant="ghost" size="icon" onClick={removeChain} title="Удалить"><Trash2 className="h-4 w-4" /></Button>
               </div>
             </div>

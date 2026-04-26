@@ -28,7 +28,7 @@ func main() {
 		DisableResize:     false,
 		Frameless:         false,
 		StartHidden:       false,
-		HideWindowOnClose: false,
+		HideWindowOnClose: true, // X сворачивает в трей; "Выйти" в трее реально выходит
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

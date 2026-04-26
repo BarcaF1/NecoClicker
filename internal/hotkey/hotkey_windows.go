@@ -1,9 +1,13 @@
 //go:build windows
 
-// Package hotkey — глобальные горячие клавиши через низкоуровневый
-// клавиатурный хук (WH_KEYBOARD_LL). В отличие от RegisterHotKey это
-// работает даже когда окно свёрнуто и не требует уникальности комбинаций
-// в системе. Хук висит на отдельной OS-thread с собственным message-loop.
+// Package hotkey — глобальные хоткеи через низкоуровневые хуки:
+//   - WH_KEYBOARD_LL для клавиатуры
+//   - WH_MOUSE_LL    для XButton1/XButton2 (Mouse4/Mouse5)
+// Оба хука висят на одной OS-thread с собственным message-loop.
+//
+// Поддерживаемые форматы строк:
+//   - "F6", "Ctrl+Shift+F1", "Alt+Q"
+//   - "Mouse4", "Mouse5", "Ctrl+Mouse4"
 package hotkey
 
 import (
@@ -14,6 +18,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -33,9 +38,14 @@ var (
 
 const (
 	whKeyboardLL = 13
+	whMouseLL    = 14
+
 	wmKeyDown    = 0x0100
 	wmSysKeyDown = 0x0104
 	wmQuit       = 0x0012
+
+	// Mouse messages в WPARAM low-level mouse hook'а
+	wmXButtonDown = 0x020B
 
 	vkShift   = 0x10
 	vkControl = 0x11
@@ -51,9 +61,26 @@ const (
 	ModWin   uint32 = 1 << 3
 )
 
+// Виртуальные "VK" коды для мыши (выходят за обычный VK-диапазон 0x00-0xFF):
+//   - 0xE000+1 = Mouse4 (XButton1)
+//   - 0xE000+2 = Mouse5 (XButton2)
+const (
+	vkMouseBase = 0xE000
+	VKMouse4    = vkMouseBase + 1
+	VKMouse5    = vkMouseBase + 2
+)
+
 type kbdllhookstruct struct {
 	VkCode      uint32
 	ScanCode    uint32
+	Flags       uint32
+	Time        uint32
+	DwExtraInfo uintptr
+}
+
+type msllhookstruct struct {
+	Pt          [2]int32 // x, y
+	MouseData   uint32   // HIWORD = XButton id
 	Flags       uint32
 	Time        uint32
 	DwExtraInfo uintptr
@@ -72,7 +99,7 @@ type winMsg struct {
 
 type binding struct {
 	mods uint32
-	key  uint32
+	key  uint32 // VK или VKMouse4/5
 	cb   func()
 }
 
@@ -80,16 +107,19 @@ type Manager struct {
 	mu       sync.RWMutex
 	binds    []binding
 	threadID uint32
-	hHook    uintptr
+	hKbd     uintptr
+	hMouse   uintptr
 	running  atomic.Bool
 	stopped  chan struct{}
+
+	recordMu sync.Mutex
+	recordCh chan string // nil = не записываем
 }
 
 func NewManager() *Manager {
 	return &Manager{stopped: make(chan struct{})}
 }
 
-// SetAll заменяет все привязки. Каждая привязка — pre-parsed (mods,key,cb).
 type Bind struct {
 	Hotkey string
 	Cb     func()
@@ -126,14 +156,53 @@ func (m *Manager) dispatch(vk uint32) bool {
 	for _, cb := range hit {
 		go cb()
 	}
+
+	// Запись хоткея, если активна
+	m.recordMu.Lock()
+	ch := m.recordCh
+	m.recordMu.Unlock()
+	if ch != nil {
+		select {
+		case ch <- formatCombo(mods, vk):
+		default:
+		}
+	}
+
 	return len(hit) > 0
 }
 
-func (m *Manager) hookProc(nCode int32, wParam, lParam uintptr) uintptr {
+func (m *Manager) keyboardHookProc(nCode int32, wParam, lParam uintptr) uintptr {
 	if nCode == 0 && (wParam == wmKeyDown || wParam == wmSysKeyDown) {
 		k := (*kbdllhookstruct)(unsafe.Pointer(lParam))
-		// Не глотаем нажатие — пусть фокусированное приложение тоже его получит.
-		m.dispatch(k.VkCode)
+		// Игнорируем сами модификаторы как primary — иначе при удержании
+		// Ctrl мы постоянно будем регистрировать "хоткей Ctrl"
+		switch k.VkCode {
+		case vkShift, vkControl, vkMenu, vkLWin, vkRWin:
+		default:
+			m.dispatch(k.VkCode)
+		}
+	}
+	ret, _, _ := procCallNextHookEx.Call(0, uintptr(nCode), wParam, lParam)
+	return ret
+}
+
+func (m *Manager) mouseHookProc(nCode int32, wParam, lParam uintptr) uintptr {
+	if nCode == 0 && wParam == wmXButtonDown {
+		mi := (*msllhookstruct)(unsafe.Pointer(lParam))
+		// HIWORD(mouseData) = 1 → XButton1, 2 → XButton2
+		xb := (mi.MouseData >> 16) & 0xFFFF
+		var vk uint32
+		switch xb {
+		case 1:
+			vk = VKMouse4
+		case 2:
+			vk = VKMouse5
+		default:
+			vk = 0
+		}
+		if vk != 0 {
+			m.dispatch(vk)
+		}
 	}
 	ret, _, _ := procCallNextHookEx.Call(0, uintptr(nCode), wParam, lParam)
 	return ret
@@ -146,38 +215,41 @@ func (m *Manager) Start() error {
 	started := make(chan error, 1)
 	go func() {
 		runtime.LockOSThread()
-		// thread не размораживаем — он живёт до Stop().
-
 		tid, _, _ := procGetCurrentThreadId.Call()
 		atomic.StoreUint32(&m.threadID, uint32(tid))
 
 		modH, _, _ := procGetModuleHandleW.Call(0)
-		cb := syscall.NewCallback(m.hookProc)
-		h, _, callErr := procSetWindowsHookExW.Call(
-			uintptr(whKeyboardLL),
-			cb,
-			modH,
-			0,
-		)
-		if h == 0 {
-			started <- fmt.Errorf("SetWindowsHookEx failed: %v", callErr)
+
+		kbdCb := syscall.NewCallback(m.keyboardHookProc)
+		hKbd, _, callErr := procSetWindowsHookExW.Call(uintptr(whKeyboardLL), kbdCb, modH, 0)
+		if hKbd == 0 {
+			started <- fmt.Errorf("SetWindowsHookEx (keyboard) failed: %v", callErr)
 			close(m.stopped)
 			return
 		}
-		m.hHook = h
+		m.hKbd = hKbd
+
+		mouseCb := syscall.NewCallback(m.mouseHookProc)
+		hMouse, _, callErr := procSetWindowsHookExW.Call(uintptr(whMouseLL), mouseCb, modH, 0)
+		if hMouse == 0 {
+			procUnhookWindowsHookEx.Call(m.hKbd)
+			started <- fmt.Errorf("SetWindowsHookEx (mouse) failed: %v", callErr)
+			close(m.stopped)
+			return
+		}
+		m.hMouse = hMouse
+
 		started <- nil
 
 		var msg winMsg
 		for {
-			r, _, _ := procGetMessageW.Call(
-				uintptr(unsafe.Pointer(&msg)),
-				0, 0, 0,
-			)
+			r, _, _ := procGetMessageW.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
 			if int32(r) <= 0 {
 				break
 			}
 		}
-		procUnhookWindowsHookEx.Call(m.hHook)
+		procUnhookWindowsHookEx.Call(m.hMouse)
+		procUnhookWindowsHookEx.Call(m.hKbd)
 		close(m.stopped)
 	}()
 	return <-started
@@ -190,6 +262,36 @@ func (m *Manager) Stop() {
 	tid := atomic.LoadUint32(&m.threadID)
 	procPostThreadMessageW.Call(uintptr(tid), wmQuit, 0, 0)
 	<-m.stopped
+}
+
+// RecordOnce ждёт первое нажатие любой клавиши/Mouse4/5 и возвращает строку
+// в каноническом формате (например "Ctrl+Shift+F1"). Возвращает ErrTimeout
+// если за timeout ничего не нажато.
+var ErrRecordTimeout = errors.New("hotkey recording timeout")
+var ErrAlreadyRecording = errors.New("already recording another hotkey")
+
+func (m *Manager) RecordOnce(timeout time.Duration) (string, error) {
+	m.recordMu.Lock()
+	if m.recordCh != nil {
+		m.recordMu.Unlock()
+		return "", ErrAlreadyRecording
+	}
+	ch := make(chan string, 1)
+	m.recordCh = ch
+	m.recordMu.Unlock()
+
+	defer func() {
+		m.recordMu.Lock()
+		m.recordCh = nil
+		m.recordMu.Unlock()
+	}()
+
+	select {
+	case s := <-ch:
+		return s, nil
+	case <-time.After(timeout):
+		return "", ErrRecordTimeout
+	}
 }
 
 func currentMods() uint32 {
@@ -214,10 +316,9 @@ func pressed(vk int) bool {
 	return r&0x8000 != 0
 }
 
-// Parse разбирает строку вида "Ctrl+Shift+F1" → (mods, vk, err).
-// Допустимые модификаторы: Ctrl/Control, Alt, Shift, Win.
-// Допустимые клавиши: A-Z, 0-9, F1-F24, Space, Enter, Tab, Esc/Escape,
-// Insert/Ins, Delete/Del, Home, End, PgUp, PgDn.
+// ---- parser ---------------------------------------------------------------
+
+// Parse разбирает строку вида "Ctrl+Shift+F1", "Mouse4", "Ctrl+Mouse5" → (mods, vk, err).
 func Parse(s string) (mods, vk uint32, err error) {
 	parts := strings.Split(strings.ToUpper(strings.ReplaceAll(s, " ", "")), "+")
 	if len(parts) == 0 || parts[0] == "" {
@@ -249,10 +350,16 @@ func Parse(s string) (mods, vk uint32, err error) {
 }
 
 func parseKey(s string) (uint32, error) {
+	switch s {
+	case "MOUSE4", "M4", "XBUTTON1":
+		return VKMouse4, nil
+	case "MOUSE5", "M5", "XBUTTON2":
+		return VKMouse5, nil
+	}
 	if len(s) > 1 && s[0] == 'F' {
 		var n int
 		if _, err := fmt.Sscanf(s, "F%d", &n); err == nil && n >= 1 && n <= 24 {
-			return uint32(0x6F + n), nil // F1=0x70 ... F24=0x87
+			return uint32(0x6F + n), nil
 		}
 	}
 	if len(s) == 1 {
@@ -292,4 +399,67 @@ func parseKey(s string) (uint32, error) {
 		return 0x27, nil
 	}
 	return 0, fmt.Errorf("unknown key %q", s)
+}
+
+// formatCombo превращает (mods, vk) обратно в строку.
+func formatCombo(mods, vk uint32) string {
+	var parts []string
+	if mods&ModCtrl != 0 {
+		parts = append(parts, "Ctrl")
+	}
+	if mods&ModAlt != 0 {
+		parts = append(parts, "Alt")
+	}
+	if mods&ModShift != 0 {
+		parts = append(parts, "Shift")
+	}
+	if mods&ModWin != 0 {
+		parts = append(parts, "Win")
+	}
+	parts = append(parts, formatVK(vk))
+	return strings.Join(parts, "+")
+}
+
+func formatVK(vk uint32) string {
+	switch vk {
+	case VKMouse4:
+		return "Mouse4"
+	case VKMouse5:
+		return "Mouse5"
+	case 0x20:
+		return "Space"
+	case 0x0D:
+		return "Enter"
+	case 0x09:
+		return "Tab"
+	case 0x1B:
+		return "Esc"
+	case 0x2D:
+		return "Insert"
+	case 0x2E:
+		return "Delete"
+	case 0x24:
+		return "Home"
+	case 0x23:
+		return "End"
+	case 0x21:
+		return "PgUp"
+	case 0x22:
+		return "PgDn"
+	case 0x26:
+		return "Up"
+	case 0x28:
+		return "Down"
+	case 0x25:
+		return "Left"
+	case 0x27:
+		return "Right"
+	}
+	if vk >= 0x70 && vk <= 0x87 {
+		return fmt.Sprintf("F%d", vk-0x6F)
+	}
+	if (vk >= 'A' && vk <= 'Z') || (vk >= '0' && vk <= '9') {
+		return string(rune(vk))
+	}
+	return fmt.Sprintf("VK_%X", vk)
 }
