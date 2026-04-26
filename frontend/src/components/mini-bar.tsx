@@ -1,5 +1,5 @@
 import { useEngine } from '@/components/engine-provider'
-import { useConfig } from '@/hooks/use-config'
+import { useConfig } from '@/components/config-provider'
 import {
   StartSimple, Stop, TogglePause, SetAlwaysOnTop,
 } from '../../wailsjs/go/main/App'

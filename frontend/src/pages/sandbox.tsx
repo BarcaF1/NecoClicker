@@ -8,7 +8,7 @@ import {
   Play, Square, Trash2, FlaskConical, Activity, Gauge, RotateCcw, ShieldCheck,
   Crosshair, ChevronDown, ChevronRight,
 } from 'lucide-react'
-import { useConfig } from '@/hooks/use-config'
+import { useConfig } from '@/components/config-provider'
 import { useEngine } from '@/components/engine-provider'
 import {
   StartChainDry, StartProfile, StartProfileDry, StartChain, Stop, ResetClicks,

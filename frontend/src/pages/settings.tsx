@@ -13,7 +13,7 @@ import {
   Folder, Keyboard, Info, Github, User, ExternalLink, Download, Upload, Database,
   Sparkles, Pause, Eye,
 } from 'lucide-react'
-import { useConfig } from '@/hooks/use-config'
+import { useConfig } from '@/components/config-provider'
 import { useConfirm } from '@/components/confirm-dialog'
 import { HotkeyRecorder } from '@/components/hotkey-recorder'
 import necoUrl from '@/assets/neco.png'

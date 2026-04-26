@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ThemeProvider, type ThemeId, THEMES, detectSystemTheme } from '@/components/theme-provider'
 import { EngineProvider } from '@/components/engine-provider'
+import { ConfigProvider } from '@/components/config-provider'
 import { ConfirmProvider } from '@/components/confirm-dialog'
 import { AppSidebar, type PageId } from '@/components/app-sidebar'
 import { MiniBar } from '@/components/mini-bar'
@@ -14,7 +15,7 @@ import { SandboxPage } from '@/pages/sandbox'
 import { ThemesPage } from '@/pages/themes'
 import { SettingsPage } from '@/pages/settings'
 import { GetConfig, SetTheme } from '../wailsjs/go/main/App'
-import { useConfig } from '@/hooks/use-config'
+import { useConfig } from '@/components/config-provider'
 
 function FullShell() {
   const [page, setPage] = useState<PageId>('home')
@@ -47,13 +48,15 @@ function ShellSwitch() {
 function Shell({ initialTheme }: { initialTheme: ThemeId }) {
   return (
     <ThemeProvider initial={initialTheme}>
-      <EngineProvider>
-       <ConfirmProvider>
-        <TooltipProvider delayDuration={300}>
-         <ShellSwitch />
-        </TooltipProvider>
-       </ConfirmProvider>
-      </EngineProvider>
+      <ConfigProvider>
+       <EngineProvider>
+        <ConfirmProvider>
+         <TooltipProvider delayDuration={300}>
+          <ShellSwitch />
+         </TooltipProvider>
+        </ConfirmProvider>
+       </EngineProvider>
+      </ConfigProvider>
     </ThemeProvider>
   )
 }

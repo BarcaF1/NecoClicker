@@ -139,19 +139,26 @@ const (
 
 // SetAlwaysOnTop включает/выключает «поверх всех окон» И автоматически
 // переводит окно в мини-режим (узкая полоска со старт/стоп/пауза).
+//
+// Порядок resize важен: если идти от мини к полному, сперва нужно снять
+// max-cap (он заблокирует увеличение), потом поднять min, потом ставить
+// размер. Иначе окно остаётся 380×100 даже после WindowSetSize.
 func (a *App) SetAlwaysOnTop(v bool) error {
 	a.cfg.AlwaysOnTop = v
 	if a.ctx != nil {
-		wruntime.WindowSetAlwaysOnTop(a.ctx, v)
 		if v {
-			// мини: фиксированный маленький размер
+			// → мини: сначала min, потом max, потом size
 			wruntime.WindowSetMinSize(a.ctx, miniWindowW, miniWindowH)
 			wruntime.WindowSetMaxSize(a.ctx, miniWindowW, miniWindowH)
 			wruntime.WindowSetSize(a.ctx, miniWindowW, miniWindowH)
+			wruntime.WindowSetAlwaysOnTop(a.ctx, true)
 		} else {
-			// полный: снимаем потолок, восстанавливаем размер
+			// → полный: сначала alwaysOnTop=false, потом убираем cap (max=8000),
+			// потом min, потом size — иначе текущий 380×100 < нового min 900×600
+			// и часть Wails-биндингов может бросить ошибку.
+			wruntime.WindowSetAlwaysOnTop(a.ctx, false)
+			wruntime.WindowSetMaxSize(a.ctx, 8000, 8000)
 			wruntime.WindowSetMinSize(a.ctx, 900, 600)
-			wruntime.WindowSetMaxSize(a.ctx, 0, 0)
 			wruntime.WindowSetSize(a.ctx, fullWindowW, fullWindowH)
 		}
 	}

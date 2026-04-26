@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Plus, Trash2, ChevronUp, ChevronDown, Play, Square, Crosshair, MousePointerClick, Move, Timer, Star, MousePointer2 } from 'lucide-react'
-import { useConfig } from '@/hooks/use-config'
+import { useConfig } from '@/components/config-provider'
 import { useEngine } from '@/components/engine-provider'
 import { useConfirm } from '@/components/confirm-dialog'
 import { HotkeyRecorder } from '@/components/hotkey-recorder'

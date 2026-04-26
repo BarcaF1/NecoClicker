@@ -9,7 +9,7 @@ import {
   Crosshair, MousePointerClick, Play, Square, Save, Keyboard,
   Plus, Trash2, Star, StarOff,
 } from 'lucide-react'
-import { useConfig } from '@/hooks/use-config'
+import { useConfig } from '@/components/config-provider'
 import { useEngine } from '@/components/engine-provider'
 import { useConfirm } from '@/components/confirm-dialog'
 import { HotkeyRecorder } from '@/components/hotkey-recorder'

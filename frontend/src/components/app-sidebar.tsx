@@ -5,7 +5,7 @@ import {
   Timer as TimerIcon, Shuffle, Pin, PinOff, Footprints, Pause as PauseIcon,
 } from 'lucide-react'
 import { useEngine } from '@/components/engine-provider'
-import { useConfig } from '@/hooks/use-config'
+import { useConfig } from '@/components/config-provider'
 import { SetAlwaysOnTop } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import necoUrl from '@/assets/neco.png'
