@@ -20,7 +20,7 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:             "NecoClicker",
+		Title:             "NecoClicker v1.5.1",
 		Width:             1100,
 		Height:            720,
 		MinWidth:          900,
